@@ -37,7 +37,7 @@ COMMAND_CATEGORIES = {
   'Arcade'    => [:coinflip, :slots, :roulette, :scratch, :dice, :cups],
   'Fun'       => [:kettle, :level, :leaderboard, :hug, :slap, :interactions],
   'Utility'   => [:ping, :help, :about, :support, :premium, :call, :dismiss],
-  'Admin'   => [:setlevel, :enablebombs, :disablebombs, :levelup, :addxp, :bomb],
+  'Admin'   => [:setlevel, :enablebombs, :disablebombs, :levelup, :addxp, :bomb, :giveaway],
   'Developer' => [:addcoins, :setcoins, :blacklist, :card, :backup, :givepremium, :removepremium]
 }.freeze
 
@@ -371,7 +371,6 @@ bot = Discordrb::Commands::CommandBot.new(
 # =========================
 # LOAD COMMANDS
 # =========================
-
 eval(File.read(File.join(__dir__, 'commands/basic.rb')), binding)
 eval(File.read(File.join(__dir__, 'commands/economy.rb')), binding)
 eval(File.read(File.join(__dir__, 'commands/gacha.rb')), binding)
@@ -379,7 +378,15 @@ eval(File.read(File.join(__dir__, 'commands/arcade.rb')), binding)
 eval(File.read(File.join(__dir__, 'commands/trade.rb')), binding)
 eval(File.read(File.join(__dir__, 'commands/developer.rb')), binding)
 eval(File.read(File.join(__dir__, 'commands/leveling.rb')), binding)
-eval(File.read(File.join(__dir__, 'commands/voice.rb')), binding)
+
+# =========================
+# LOAD EVENTS (Background Logic)
+# =========================
+eval(File.read(File.join(__dir__, 'events/leveling.rb')), binding)
+eval(File.read(File.join(__dir__, 'events/economy.rb')), binding)
+eval(File.read(File.join(__dir__, 'events/gacha.rb')), binding)
+eval(File.read(File.join(__dir__, 'events/trade.rb')), binding)
+eval(File.read(File.join(__dir__, 'events/basic.rb')), binding)
 
 # =========================
 # RUN

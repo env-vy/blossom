@@ -1,31 +1,3 @@
-bot.command(:levelup, description: 'Enable or disable level-up messages for this server (Admin only)', category: 'Admin') do |event, state|
-  unless event.server
-    send_embed(event, title: "#{EMOJIS['developer']} Level-Up Settings", description: 'This command can only be used in a server.')
-    next
-  end
-
-  perms = event.user.permission? :manage_server, event.channel
-  unless perms
-    send_embed(event, title: "#{EMOJIS['developer']} Level-Up Settings", description: 'You need the Manage Server permission to change this setting.')
-    next
-  end
-
-  sid = event.server.id
-
-  case state&.downcase
-  when 'on', 'enable', 'enabled'
-    DB.set_levelup(sid, true)
-    send_embed(event, title: "#{EMOJIS['developer']} Level-Up Settings", description: 'Level-up messages are now **enabled** in this server.')
-  when 'off', 'disable', 'disabled'
-    DB.set_levelup(sid, false)
-    send_embed(event, title: "#{EMOJIS['developer']} Level-Up Settings", description: 'Level-up messages are now **disabled** in this server.')
-  else
-    current = DB.levelup_enabled?(sid) ? 'enabled' : 'disabled'
-    send_embed(event, title: "#{EMOJIS['developer']} Level-Up Settings", description: "Usage: `!levelup on` or `!levelup off`\nCurrently **#{current}**.")
-  end
-  nil
-end
-
 bot.command(:setlevel, description: 'Set a user\'s server level (Admin Only)', min_args: 2, category: 'Admin') do |event, mention, level|
   unless event.server
     event.respond("#{EMOJIS['x_']} This command can only be used inside a server!")

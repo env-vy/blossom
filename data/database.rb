@@ -6,16 +6,92 @@ class BotDatabase
     @db = SQLite3::Database.new("blossom.db")
     @db.results_as_hash = true
     
-    @db.execute <<-SQL
+    # Run all table creations ONCE when the bot boots up!
+    @db.execute_batch <<-SQL
       CREATE TABLE IF NOT EXISTS server_settings (
         server_id INTEGER PRIMARY KEY,
         levelup_enabled INTEGER DEFAULT 1
       );
-    SQL
-
-    @db.execute <<-SQL
+      
       CREATE TABLE IF NOT EXISTS blacklist (
         user_id INTEGER PRIMARY KEY
+      );
+
+      CREATE TABLE IF NOT EXISTS global_users (
+        user_id INTEGER PRIMARY KEY,
+        coins INTEGER DEFAULT 0,
+        daily_at TEXT,
+        work_at TEXT,
+        stream_at TEXT,
+        post_at TEXT,
+        collab_at TEXT,
+        summon_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory (
+        user_id INTEGER,
+        item_name TEXT,
+        count INTEGER DEFAULT 0,
+        PRIMARY KEY(user_id, item_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS collections (
+        user_id INTEGER,
+        character_name TEXT,
+        rarity TEXT,
+        count INTEGER DEFAULT 0,
+        ascended INTEGER DEFAULT 0,
+        PRIMARY KEY(user_id, character_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS server_xp (
+        server_id INTEGER,
+        user_id INTEGER,
+        xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 1,
+        last_xp_at TEXT,
+        PRIMARY KEY(server_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS interactions (
+        user_id INTEGER PRIMARY KEY,
+        hug_sent INTEGER DEFAULT 0,
+        hug_received INTEGER DEFAULT 0,
+        slap_sent INTEGER DEFAULT 0,
+        slap_received INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS server_configs (
+        server_id INTEGER PRIMARY KEY, 
+        levelup_channel INTEGER, 
+        levelup_enabled INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS server_bombs (
+        server_id INTEGER PRIMARY KEY, 
+        enabled INTEGER, 
+        channel_id INTEGER, 
+        threshold INTEGER, 
+        count INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS lifetime_premium (
+        user_id INTEGER PRIMARY KEY
+      );
+
+      CREATE TABLE IF NOT EXISTS giveaways (
+        id TEXT PRIMARY KEY, 
+        channel_id INTEGER, 
+        message_id INTEGER, 
+        host_id INTEGER, 
+        prize TEXT, 
+        end_time INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS giveaway_entrants (
+        giveaway_id TEXT, 
+        user_id INTEGER, 
+        UNIQUE(giveaway_id, user_id)
       );
     SQL
   end
@@ -43,7 +119,7 @@ class BotDatabase
   end
 
   def get_top_coins(limit = 10)
-  @db.execute("SELECT user_id, coins FROM global_users ORDER BY coins DESC LIMIT ?", [limit])
+    @db.execute("SELECT user_id, coins FROM global_users ORDER BY coins DESC LIMIT ?", [limit])
   end
 
   # =========================
@@ -168,12 +244,10 @@ class BotDatabase
   end
 
   def set_levelup_config(server_id, channel_id, enabled = true)
-    @db.execute("CREATE TABLE IF NOT EXISTS server_configs (server_id INTEGER PRIMARY KEY, levelup_channel INTEGER, levelup_enabled INTEGER)")
     @db.execute("INSERT OR REPLACE INTO server_configs (server_id, levelup_channel, levelup_enabled) VALUES (?, ?, ?)", [server_id, channel_id, enabled ? 1 : 0])
   end
 
   def get_levelup_config(server_id)
-    @db.execute("CREATE TABLE IF NOT EXISTS server_configs (server_id INTEGER PRIMARY KEY, levelup_channel INTEGER, levelup_enabled INTEGER)")
     result = @db.execute("SELECT levelup_channel, levelup_enabled FROM server_configs WHERE server_id = ?", [server_id]).first
     return { channel: nil, enabled: true } unless result
     { channel: result[0], enabled: result[1] == 1 }
@@ -184,15 +258,13 @@ class BotDatabase
   # =========================
 
   def save_bomb_config(sid, enabled, channel_id, threshold, count)
-  @db.execute("CREATE TABLE IF NOT EXISTS server_bombs (server_id INTEGER PRIMARY KEY, enabled INTEGER, channel_id INTEGER, threshold INTEGER, count INTEGER)")
-  @db.execute("INSERT OR REPLACE INTO server_bombs (server_id, enabled, channel_id, threshold, count) VALUES (?, ?, ?, ?, ?)", [sid, enabled ? 1 : 0, channel_id, threshold, count])
-end
+    @db.execute("INSERT OR REPLACE INTO server_bombs (server_id, enabled, channel_id, threshold, count) VALUES (?, ?, ?, ?, ?)", [sid, enabled ? 1 : 0, channel_id, threshold, count])
+  end
 
-def load_all_bomb_configs
-  @db.execute("CREATE TABLE IF NOT EXISTS server_bombs (server_id INTEGER PRIMARY KEY, enabled INTEGER, channel_id INTEGER, threshold INTEGER, count INTEGER)")
-  rows = @db.execute("SELECT * FROM server_bombs")
-  configs = {}
-  rows.each do |row|
+  def load_all_bomb_configs
+    rows = @db.execute("SELECT * FROM server_bombs")
+    configs = {}
+    rows.each do |row|
       configs[row['server_id']] = {
         'enabled' => row['enabled'] == 1,
         'channel_id' => row['channel_id'],
@@ -201,8 +273,8 @@ def load_all_bomb_configs
         'last_user_id' => nil
       }
     end
-  configs
-end
+    configs
+  end
 
   # =========================
   # BLACKLIST
@@ -223,15 +295,11 @@ end
     @db.execute("SELECT user_id FROM blacklist").map { |row| row['user_id'] }
   end
 
-end
-
   # =========================
   # LIFETIME PREMIUM
   # =========================
-  public
-  
+
   def set_lifetime_premium(uid, status)
-    @db.execute("CREATE TABLE IF NOT EXISTS lifetime_premium (user_id INTEGER PRIMARY KEY)")
     if status
       @db.execute("INSERT OR IGNORE INTO lifetime_premium (user_id) VALUES (?)", [uid])
     else
@@ -240,7 +308,6 @@ end
   end
 
   def is_lifetime_premium?(uid)
-    @db.execute("CREATE TABLE IF NOT EXISTS lifetime_premium (user_id INTEGER PRIMARY KEY)")
     row = @db.get_first_row("SELECT user_id FROM lifetime_premium WHERE user_id = ?", [uid])
     !row.nil?
   end
@@ -248,39 +315,29 @@ end
   # =========================
   # GIVEAWAYS
   # =========================
-  public
-
-  def setup_giveaways
-    @db.execute("CREATE TABLE IF NOT EXISTS giveaways (id TEXT PRIMARY KEY, channel_id INTEGER, message_id INTEGER, host_id INTEGER, prize TEXT, end_time INTEGER)")
-    @db.execute("CREATE TABLE IF NOT EXISTS giveaway_entrants (giveaway_id TEXT, user_id INTEGER, UNIQUE(giveaway_id, user_id))")
-  end
 
   def create_giveaway(id, channel_id, message_id, host_id, prize, end_time)
-    setup_giveaways
     @db.execute("INSERT INTO giveaways (id, channel_id, message_id, host_id, prize, end_time) VALUES (?, ?, ?, ?, ?, ?)", [id, channel_id, message_id, host_id, prize, end_time])
   end
 
   def add_giveaway_entrant(gw_id, user_id)
-    setup_giveaways
-    # INSERT OR IGNORE silently fails if they are already in the database for this giveaway
     @db.execute("INSERT OR IGNORE INTO giveaway_entrants (giveaway_id, user_id) VALUES (?, ?)", [gw_id, user_id])
-    @db.changes > 0 # Returns true if they were added, false if they already existed
+    @db.changes > 0 
   end
 
   def get_giveaway_entrants(gw_id)
-    setup_giveaways
     @db.execute("SELECT user_id FROM giveaway_entrants WHERE giveaway_id = ?", [gw_id]).map { |r| r['user_id'] }
   end
 
   def get_active_giveaways
-    setup_giveaways
     @db.execute("SELECT * FROM giveaways")
   end
 
   def delete_giveaway(gw_id)
-    setup_giveaways
     @db.execute("DELETE FROM giveaways WHERE id = ?", [gw_id])
     @db.execute("DELETE FROM giveaway_entrants WHERE giveaway_id = ?", [gw_id])
   end
+
+end
 
 DB = BotDatabase.new
