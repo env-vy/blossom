@@ -1,5 +1,5 @@
 # =========================
-# CORE LEVELING ENGINE (EVENT)
+# CORE LEVELING
 # =========================
 
 bot.message do |event|
@@ -54,38 +54,50 @@ bot.message do |event|
               member.remove_role(role_id) if member.role?(role_id)
             end
             member.add_role(earned_role_id) unless member.role?(earned_role_id)
-          rescue Discordrb::Errors::NoPermission
-            puts "!!! [WARNING] Role hierarchy error for #{member.display_name}"
+          rescue StandardError => e
+            puts "!!! [WARNING] Role hierarchy error: #{e.message}"
           end
         end
       end
     end
 
-    config = DB.get_levelup_config(sid) || {}
-    enabled_val = config['enabled'] || config[:enabled]
-    is_enabled = enabled_val.nil? ? true : [true, 1, "true", "1"].include?(enabled_val)
-
-    if is_enabled
-      embed = Discordrb::Webhooks::Embed.new(
-        title: "🎉 Level Up!",
-        description: "Congratulations #{event.user.mention}! You just advanced to **Level #{new_level}**!",
-        color: NEON_COLORS.sample
-      )
-      
-      embed.add_field(name: 'XP Remaining', value: "#{new_xp}/#{new_level * 100}", inline: true)
-      embed.add_field(name: 'Coins', value: "#{DB.get_coins(uid)} #{EMOJIS['s_coin']}", inline: true)
-
-      chan_id = config['channel_id'] || config[:channel_id] || config['channel'] || config[:channel]
+    if DB.levelup_enabled?(sid)
+      config = DB.get_levelup_config(sid)
+      chan_id = config[:channel]
 
       if chan_id && chan_id.to_i > 0
         target_channel = event.bot.channel(chan_id.to_i, event.server)
+        
         if target_channel
+          embed = Discordrb::Webhooks::Embed.new
+          embed.title = "🎉 Level Up!"
+          embed.description = "Congratulations #{event.user.mention}! You just advanced to **Level #{new_level}**!"
+          embed.color = NEON_COLORS.sample
+          embed.add_field(name: 'XP Remaining', value: "#{new_xp}/#{new_level * 100}", inline: true)
+          embed.add_field(name: 'Coins', value: "#{DB.get_coins(uid)} #{EMOJIS['s_coin']}", inline: true)
+
           target_channel.send_message(nil, false, embed)
         else
-          event.channel.send_message(nil, false, embed, nil, nil, event.message)
+          send_embed(
+            event,
+            title: "🎉 Level Up!",
+            description: "Congratulations #{event.user.mention}! You just advanced to **Level #{new_level}**!",
+            fields: [
+              { name: 'XP Remaining', value: "#{new_xp}/#{new_level * 100}", inline: true },
+              { name: 'Coins', value: "#{DB.get_coins(uid)} #{EMOJIS['s_coin']}", inline: true }
+            ]
+          )
         end
       else
-        event.channel.send_message(nil, false, embed, nil, nil, event.message)
+        send_embed(
+          event,
+          title: "🎉 Level Up!",
+          description: "Congratulations #{event.user.mention}! You just advanced to **Level #{new_level}**!",
+          fields: [
+            { name: 'XP Remaining', value: "#{new_xp}/#{new_level * 100}", inline: true },
+            { name: 'Coins', value: "#{DB.get_coins(uid)} #{EMOJIS['s_coin']}", inline: true }
+          ]
+        )
       end
     end
   end
